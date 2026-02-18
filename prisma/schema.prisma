@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Enums handled as Strings for SQLite compatibility
+
+// Core Models
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String   // Will store plain text for MVP, hashed in production
+  name      String
+  role      String   @default("STUDENT") // ADMIN, TEACHER, STUDENT
+  createdAt DateTime @default(now())
+
+  // Relations
+  groupsAsTeacher Group[] @relation("GroupTeachers")
+  groupsAsStudent Group[] @relation("GroupStudents")
+  
+  timeLogs        TimeLog[]
+  evaluations     Evaluation[] // Progress in specific groups
+  attendance      Attendance[]
+}
+
+model School {
+  id        String   @id @default(cuid())
+  name      String
+  groups    Group[]
+  createdAt DateTime @default(now())
+}
+
+model Group {
+  id          String   @id @default(cuid())
+  name        String   // e.g., "Robotics A"
+  dayOfWeek   String   // e.g., "Monday"
+  timeSlot    String   // e.g., "17:00 - 18:30"
+  subject     String   // e.g., "Python Level 1"
+  ageRange    String   // e.g., "10-12 years"
+  
+  schoolId    String
+  school      School   @relation(fields: [schoolId], references: [id])
+  
+  // A group follows a master track
+  trackId     String?
+  track       Track?   @relation(fields: [trackId], references: [id])
+
+  // M-N Relations
+  teachers    User[]   @relation("GroupTeachers")
+  students    User[]   @relation("GroupStudents")
+
+  // Operational Data
+  startDate   DateTime? // When the track logic starts for this group
+  attendance  Attendance[]
+  sessionLogs SessionLog[] // Teacher notes for specific sessions
+  evaluations Evaluation[] // Student gamification data for this group
+}
+
+// Curriculum Management
+model Track {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  sessions    Session[]
+  groups      Group[]
+}
+
+model Session {
+  id          String   @id @default(cuid())
+  title       String
+  link        String?  // URL to slides or resources
+  orderIndex  Int
+  
+  trackId     String
+  track       Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  
+  logs        SessionLog[]
+  attendance  Attendance[]
+}
+
+// Daily Operations
+model SessionLog {
+  id          String   @id @default(cuid())
+  notes       String?  // "Notas del Monitor"
+  date        DateTime @default(now())
+  
+  groupId     String
+  group       Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  
+  sessionId   String?  // Which session from the track was taught
+  session     Session? @relation(fields: [sessionId], references: [id])
+}
+
+model Attendance {
+  id        String   @id @default(cuid())
+  date      DateTime @default(now())
+  present   Boolean  @default(false)
+
+  sessionId String?
+  session   Session? @relation(fields: [sessionId], references: [id])
+  
+  studentId String
+  student   User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+}
+
+model TimeLog {
+  id        String      @id @default(cuid())
+  type      String      // CLOCK_IN, CLOCK_OUT
+  timestamp DateTime    @default(now())
+  
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Gamification
+model Evaluation {
+  id        String   @id @default(cuid())
+  xp        Int      @default(0)
+  
+  // Skills (1-10 scale)
+  skillLogic         Int @default(0)
+  skillCreativity    Int @default(0)
+  skillTeamwork      Int @default(0)
+  skillProblemSolving Int @default(0)
+  skillAutonomy      Int @default(0)
+  skillCommunication Int @default(0)
+
+  studentId String
+  student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  groupId   String
+  group     Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  
+  @@unique([groupId, studentId])
+  @@unique([studentId, groupId]) // One evaluation profile per student per group
+}
