@@ -13,6 +13,19 @@ export async function getGroupById(groupId: string) {
                 school: true,
                 teachers: true,
                 students: true,
+                // Include the new relation for Multi-Tracks
+                groupTracks: {
+                    include: {
+                        track: {
+                            include: {
+                                sessions: {
+                                    orderBy: { orderIndex: 'asc' }
+                                }
+                            }
+                        }
+                    },
+                    orderBy: { startDate: 'asc' }
+                }
             },
         })
         return { success: true, data: group }
@@ -32,6 +45,54 @@ export async function getAvailableTeachers() {
     } catch (error) {
         console.error('Failed to fetch teachers:', error)
         return { success: false, error: 'Failed to fetch teachers' }
+    }
+}
+
+export async function getAvailableTracks() {
+    try {
+        const tracks = await prisma.track.findMany({
+            orderBy: { title: 'asc' }
+        })
+        return { success: true, data: tracks }
+    } catch (error) {
+        console.error('Failed to fetch tracks:', error)
+        return { success: false, error: 'Failed to fetch tracks' }
+    }
+}
+
+// Add a track to a group (Multi-track support)
+export async function addTrackToGroup(groupId: string, trackId: string, startDate: Date) {
+    try {
+        await prisma.groupTrack.create({
+            data: {
+                groupId,
+                trackId,
+                startDate
+            }
+        })
+
+        revalidatePath(`/admin/groups/${groupId}`)
+        revalidatePath(`/teacher/groups/${groupId}`)
+        return { success: true }
+    } catch (error) {
+        console.error('Failed to add track to group:', error)
+        return { success: false, error: 'Failed to add track to group' }
+    }
+}
+
+// Remove a track from a group
+export async function removeTrackFromGroup(groupTrackId: string, groupId: string) {
+    try {
+        await prisma.groupTrack.delete({
+            where: { id: groupTrackId }
+        })
+
+        revalidatePath(`/admin/groups/${groupId}`)
+        revalidatePath(`/teacher/groups/${groupId}`)
+        return { success: true }
+    } catch (error) {
+        console.error('Failed to remove track from group:', error)
+        return { success: false, error: 'Failed to remove track from group' }
     }
 }
 
@@ -68,22 +129,5 @@ export async function removeTeacher(groupId: string, teacherId: string) {
     } catch (error) {
         console.error('Failed to remove teacher:', error)
         return { success: false, error: 'Failed to remove teacher' }
-    }
-}
-
-export async function assignTrackToGroup(groupId: string, trackId: string, startDate: Date | null) {
-    try {
-        await prisma.group.update({
-            where: { id: groupId },
-            data: {
-                trackId: trackId,
-                startDate: startDate
-            },
-        })
-        revalidatePath(`/admin/groups/${groupId}`)
-        return { success: true }
-    } catch (error) {
-        console.error('Failed to assign track:', error)
-        return { success: false, error: 'Failed to assign track' }
     }
 }

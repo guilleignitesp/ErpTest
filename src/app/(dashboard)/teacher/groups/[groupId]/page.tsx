@@ -1,15 +1,11 @@
 import { PrismaClient } from '@prisma/client'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Clock, GraduationCap, Calendar } from 'lucide-react'
-import AttendanceTab from './_components/AttendanceTab'
-import TrackTab from './_components/TrackTab'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs' // Assuming we don't have this, I will implement a simple client tab switcher inline or use a simple HTML approach if shadcn not installed. Since I don't see shadcn components in file tree, I'll build a custom simple tab switcher.
+import { ArrowLeft, GraduationCap, Calendar, Clock } from 'lucide-react'
+import { addWeeks } from 'date-fns'
+import GroupDetailClient from './_components/GroupDetailClient'
 
 const prisma = new PrismaClient()
-
-// I'll create a Client Component for the Tabs layout to avoid huge file here
-import GroupDetailClient from './_components/GroupDetailClient'
 
 export default async function TeacherGroupPage({ params }: { params: { groupId: string } }) {
     const group = await prisma.group.findUnique({
@@ -28,19 +24,61 @@ export default async function TeacherGroupPage({ params }: { params: { groupId: 
                 },
                 orderBy: { name: 'asc' }
             },
-            track: {
+            // Fetch the new Multi-Track relation
+            groupTracks: {
                 include: {
-                    sessions: {
-                        orderBy: { orderIndex: 'asc' }
+                    track: {
+                        include: {
+                            sessions: {
+                                orderBy: { orderIndex: 'asc' },
+                                select: {
+                                    id: true,
+                                    title: true,
+                                    orderIndex: true,
+                                    link: true
+                                }
+                            }
+                        }
                     }
-                }
+                },
+                orderBy: { startDate: 'asc' }
             },
-            attendance: true, // Fetch all attendance to map to sessions
-            sessionLogs: true // fetch all logs for this group to map them in TrackTab
+            attendance: true, // Fetch attendance
+            sessionLogs: true
         }
     })
 
     if (!group) return notFound()
+
+    // --- DATA TRANSFORMATION FOR MULTI-TRACK ---
+    // We need to flatten sessions from all tracks into a single timeline
+    // and calculate the specific date for each session.
+
+    let allSessions: any[] = []
+
+    if (group.groupTracks.length > 0) {
+        allSessions = group.groupTracks.flatMap(gt => {
+            return gt.track.sessions.map(session => {
+                // Logic: Session Date = Track Start Date + (OrderIndex - 1) weeks
+                // Assuming orderIndex starts at 1. If starts at 0, remove the -1.
+                // Usually orderIndex 1 is the first session (week 0).
+                const weeksToAdd = session.orderIndex > 0 ? session.orderIndex - 1 : 0
+                const sessionDate = addWeeks(new Date(gt.startDate), weeksToAdd)
+
+                return {
+                    ...session,
+                    date: sessionDate.toISOString(), // Pass as string to Client Component
+                    trackTitle: gt.track.title // Useful to show which track it belongs to
+                }
+            })
+        })
+
+        // Sort all sessions by date chronologically
+        allSessions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    }
+
+    // Determine a "primary" start date just for the header display (use the first track's date or null)
+    const displayStartDate = group.groupTracks.length > 0 ? group.groupTracks[0].startDate : null
 
     return (
         <div className="space-y-6">
@@ -57,7 +95,7 @@ export default async function TeacherGroupPage({ params }: { params: { groupId: 
                 </div>
             </div>
 
-            {(!group.trackId || !group.startDate) && (
+            {group.groupTracks.length === 0 && (
                 <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg mb-6">
                     <div className="flex gap-3">
                         <div className="flex-shrink-0">
@@ -69,8 +107,8 @@ export default async function TeacherGroupPage({ params }: { params: { groupId: 
                             </h3>
                             <div className="mt-2 text-sm text-yellow-700">
                                 <p>
-                                    Este grupo no tiene asignado un <strong>Plan de Estudios (Track)</strong> o una <strong>Fecha de Inicio</strong>.
-                                    Algunas funcionalidades como el seguimiento de sesiones no estarán disponibles hasta que un administrador lo configure.
+                                    Este grupo no tiene asignado ningún <strong>Plan de Estudios (Track)</strong>.
+                                    Contacta con el administrador para que asigne los tracks y fechas de inicio.
                                 </p>
                             </div>
                         </div>
@@ -84,14 +122,17 @@ export default async function TeacherGroupPage({ params }: { params: { groupId: 
                     ...s,
                     evaluation: s.evaluations[0] || null
                 }))}
-                startDate={group.startDate}
+                // Pass null if no tracks, otherwise the first track date, 
+                // BUT the important part is the `sessions` array which now has dates.
+                startDate={displayStartDate}
                 attendanceRecords={group.attendance.map(a => ({
                     studentId: a.studentId,
-                    sessionId: a.sessionId || '', // should be present now
+                    sessionId: a.sessionId || '',
                     present: a.present
                 }))}
-                sessions={group.track?.sessions || []}
+                sessions={allSessions}
                 sessionLogs={group.sessionLogs}
+                groupTracks={group.groupTracks}
             />
         </div>
     )

@@ -46,15 +46,19 @@ model Group {
   school      School   @relation(fields: [schoolId], references: [id])
   
   // A group follows a master track
-  trackId     String?
-  track       Track?   @relation(fields: [trackId], references: [id])
+  // A group follows a master track - DEPRECATED
+  // trackId     String?
+  // track       Track?   @relation(fields: [trackId], references: [id])
+  // startDate   DateTime? 
+
+  // New Multi-Track System
+  groupTracks GroupTrack[]
 
   // M-N Relations
   teachers    User[]   @relation("GroupTeachers")
   students    User[]   @relation("GroupStudents")
 
   // Operational Data
-  startDate   DateTime? // When the track logic starts for this group
   attendance  Attendance[]
   sessionLogs SessionLog[] // Teacher notes for specific sessions
   evaluations Evaluation[] // Student gamification data for this group
@@ -66,7 +70,24 @@ model Track {
   title       String
   description String?
   sessions    Session[]
-  groups      Group[]
+  groupTracks GroupTrack[]
+}
+
+model GroupTrack {
+  id        String   @id @default(cuid())
+  
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  
+  trackId   String
+  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  
+  startDate DateTime
+  createdAt DateTime @default(now())
+  
+  @@unique([groupId, trackId]) // Prevent duplicate assignment of same track to same group? 
+                               // Actually, maybe we want to allow it? But usually not concurrently.
+                               // Let's keep it unique for now to simplify.
 }
 
 model Session {

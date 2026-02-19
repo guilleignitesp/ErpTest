@@ -26,7 +26,7 @@ export default function AdminSidebar() {
     return (
         <aside className="w-64 bg-brand-navy text-white flex flex-col h-screen fixed left-0 top-0">
             <div className="p-6 border-b border-gray-700">
-                <h1 className="text-2xl font-bold text-brand-yellow">TechSchool</h1>
+                <h1 className="text-2xl font-bold text-brand-yellow">IGNITE SP</h1>
                 <p className="text-sm text-gray-400">Admin Portal</p>
             </div>
 

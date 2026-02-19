@@ -5,42 +5,10 @@ import { cookies } from 'next/headers'
 
 const prisma = new PrismaClient()
 
-export type StudentDashboardData = {
-    user: {
-        name: string
-        username: string
-        initials: string
-    }
-    group: {
-        name: string
-    } | null
-    xp: number
-    level: number
-    nextLevelProgress: number // 0-100
-    skills: {
-        subject: string
-        A: number
-        fullMark: number
-    }[]
-    mission: {
-        trackName: string
-        progress: number // 0-100
-    } | null
-    leaderboard: {
-        rank: number
-        name: string
-        xp: number
-        isCurrentUser: boolean
-    }[]
-}
+export async function getStudentDashboardData() {
+    const sessionCookie = cookies().get('session')
 
-export async function getStudentDashboardData(): Promise<StudentDashboardData | null> {
-    const cookieStore = cookies()
-    const sessionCookie = cookieStore.get('session')
-
-    if (!sessionCookie || !sessionCookie.value) {
-        return null
-    }
+    if (!sessionCookie || !sessionCookie.value) return null
 
     let session
     try {
@@ -49,121 +17,123 @@ export async function getStudentDashboardData(): Promise<StudentDashboardData | 
         return null
     }
 
-    const userId = session.userId
+    // FIX: Check for userId, not id
+    if (!session || !session.userId) return null
 
-    // Fetch Student with Group, Track, Evaluation
-    const student = await prisma.user.findUnique({
-        where: { id: userId },
+    const user = await prisma.user.findUnique({
+        where: { id: session.userId }, // FIX: Use session.userId
         include: {
             groupsAsStudent: {
-                take: 1, // Focus on the first group for now
+                take: 1,
                 include: {
                     school: true,
-                    track: {
+                    groupTracks: {
                         include: {
-                            sessions: true
-                        }
+                            track: {
+                                include: {
+                                    sessions: true
+                                }
+                            }
+                        },
+                        orderBy: { startDate: 'desc' }
                     },
-                    evaluations: true, // This returns all evaluations for this group (which should be just one per student-group pair, but relation is 1-N from Group side? No, User-Evaluation is 1-N. Group-Evaluation is 1-N. We need to filter by studentId in the relation or just find relation)
-                    // Actually, let's fetch specific evaluation separately or filter in memory if easier.
-                    // The relation `evaluations` in Group model includes ALL students' evaluations. That's too much.
-                    // The relation `evaluations` in User model includes evaluations for ALL groups.
+                    evaluations: {
+                        where: { studentId: session.userId } // FIX: Use session.userId
+                    },
+                    attendance: {
+                        where: { studentId: session.userId, present: true } // FIX: Use session.userId
+                    }
                 }
-            },
-            evaluations: true, // Fetch user's evaluations
-            attendance: true
+            }
         }
     })
 
-    if (!student) return null
+    if (!user) return null
 
-    const group = student.groupsAsStudent[0]
-    if (!group) {
-        // Fallback if no group
-        return {
-            user: {
-                name: student.name,
-                username: student.username,
-                initials: student.name.substring(0, 2).toUpperCase()
-            },
-            group: null,
-            xp: 0,
-            level: 1,
-            nextLevelProgress: 0,
-            skills: [],
-            mission: null,
-            leaderboard: []
-        }
+    const group = user.groupsAsStudent[0]
+    const evaluation = group?.evaluations[0]
+
+    // --- Calculate Mission Progress ---
+    let totalSessions = 0
+    let currentTrackName = "Sin Misión"
+
+    if (group && group.groupTracks.length > 0) {
+        currentTrackName = group.groupTracks[0].track.title
+        group.groupTracks.forEach(gt => {
+            totalSessions += gt.track.sessions.length
+        })
     }
 
-    // 1. Evaluations & XP
-    // Find evaluation for this specific group
-    const evaluation = student.evaluations.find(e => e.groupId === group.id)
+    const attendedSessions = group?.attendance.length || 0
+    const progress = totalSessions > 0
+        ? Math.round((attendedSessions / totalSessions) * 100)
+        : 0
 
+    // --- Calculate XP & Level ---
     const xp = evaluation?.xp || 0
     const level = Math.floor(xp / 1000) + 1
-    const nextLevelProgress = (xp % 1000) / 10 // (Remainder / 1000) * 100
+    const xpForCurrentLevel = xp % 1000
+    const nextLevelProgress = (xpForCurrentLevel / 1000) * 100
 
-    // Skills Mapping for Radar Chart
-    const skills = [
-        { subject: 'Logic', A: evaluation?.skillLogic || 0, fullMark: 10 },
-        { subject: 'Creativity', A: evaluation?.skillCreativity || 0, fullMark: 10 },
-        { subject: 'Teamwork', A: evaluation?.skillTeamwork || 0, fullMark: 10 },
-        { subject: 'Problem Solving', A: evaluation?.skillProblemSolving || 0, fullMark: 10 },
-        { subject: 'Autonomy', A: evaluation?.skillAutonomy || 0, fullMark: 10 },
-        { subject: 'Communication', A: evaluation?.skillCommunication || 0, fullMark: 10 },
-    ]
+    // --- Leaderboard ---
+    let leaderboard = []
+    if (group) {
+        const groupStudents = await prisma.user.findMany({
+            where: {
+                groupsAsStudent: {
+                    some: { id: group.id }
+                }
+            },
+            select: {
+                id: true,
+                name: true,
+                evaluations: {
+                    where: { groupId: group.id },
+                    select: { xp: true }
+                }
+            }
+        })
 
-    // 2. Mission Progress (Track)
-    let mission = null
-    if (group.track) {
-        const totalSessions = group.track.sessions.length
-        // Count distinct sessions attended for this group
-        // Attendance records for this student in this group where present is true
-        // and sessionId is associated with the track
-        // Simplified: Count attendance where group works and present=true. 
-        // Ideally we match sessions, but count is a good proxy.
-        // Let's filter attendance by groupId and present=true
-        const attendedSessions = student.attendance.filter(a => a.groupId === group.id && a.present).length
-
-        const progress = totalSessions > 0 ? Math.round((attendedSessions / totalSessions) * 100) : 0
-
-        mission = {
-            trackName: group.track.title,
-            progress: Math.min(progress, 100)
-        }
+        leaderboard = groupStudents
+            .map(s => ({
+                id: s.id,
+                name: s.name,
+                xp: s.evaluations[0]?.xp || 0,
+                isCurrentUser: s.id === user.id
+            }))
+            .sort((a, b) => b.xp - a.xp)
+            .slice(0, 5)
+            .map((s, index) => ({
+                ...s,
+                rank: index + 1
+            }))
     }
 
-    // 3. Leaderboard
-    // Fetch all evaluations for this group, ordered by XP desc
-    const groupEvaluations = await prisma.evaluation.findMany({
-        where: { groupId: group.id },
-        include: { student: true },
-        orderBy: { xp: 'desc' },
-        take: 5
-    })
-
-    const leaderboard = groupEvaluations.map((evalRecord, index) => ({
-        rank: index + 1,
-        name: evalRecord.student.name,
-        xp: evalRecord.xp,
-        isCurrentUser: evalRecord.studentId === userId
-    }))
+    // --- Skills Data ---
+    const skills = [
+        { subject: 'Lógica', A: evaluation?.skillLogic || 0, fullMark: 10 },
+        { subject: 'Creatividad', A: evaluation?.skillCreativity || 0, fullMark: 10 },
+        { subject: 'Equipo', A: evaluation?.skillTeamwork || 0, fullMark: 10 },
+        { subject: 'Resolución', A: evaluation?.skillProblemSolving || 0, fullMark: 10 },
+        { subject: 'Autonomía', A: evaluation?.skillAutonomy || 0, fullMark: 10 },
+        { subject: 'Comun.', A: evaluation?.skillCommunication || 0, fullMark: 10 },
+    ]
 
     return {
         user: {
-            name: student.name,
-            username: student.username,
-            initials: student.name.substring(0, 2).toUpperCase()
+            name: user.name,
+            username: user.username,
+            initials: user.name.substring(0, 2).toUpperCase()
         },
-        group: {
-            name: group.name
-        },
+        group: group ? { name: group.name } : null,
         xp,
         level,
         nextLevelProgress,
+        mission: {
+            trackName: currentTrackName,
+            progress
+        },
         skills,
-        mission,
         leaderboard
     }
 }

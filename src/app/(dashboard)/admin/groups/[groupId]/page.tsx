@@ -80,10 +80,10 @@ export default async function GroupDetailPage({ params }: { params: { groupId: s
                     </div>
 
                     {/* Track Selector */}
+                    {/* Track Selector */}
                     <TrackSelector
                         groupId={group.id}
-                        currentTrack={group.trackId ? { id: group.trackId, title: allTracks?.find((t: { id: string }) => t.id === group.trackId)?.title || '' } : null}
-                        currentStartDate={group.startDate}
+                        groupTracks={group.groupTracks || []}
                         availableTracks={allTracks || []}
                     />
                 </div>

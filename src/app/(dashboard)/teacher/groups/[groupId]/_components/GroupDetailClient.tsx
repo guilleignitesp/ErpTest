@@ -1,118 +1,114 @@
 'use client'
 
 import { useState } from 'react'
-import { UserCheck, BookOpen, Trophy } from 'lucide-react'
-import clsx from 'clsx'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { UserCheck, BookOpen, BarChart2 } from 'lucide-react'
 import AttendanceTab from './AttendanceTab'
 import TrackTab from './TrackTab'
 import EvaluationTab from './EvaluationTab'
 
-// Types needed
-type Student = {
+type Session = {
     id: string
-    name: string
-    username: string
-    evaluation?: {
-        id: string
-        xp: number
-        skillLogic: number
-        skillCreativity: number
-        skillTeamwork: number
-        skillProblemSolving: number
-        skillAutonomy: number
-        skillCommunication: number
-    } | null
+    title: string
+    orderIndex: number
+    date: Date | string
+    trackTitle?: string
+    link: string | null
 }
-type Session = { id: string; title: string; link: string | null; orderIndex: number }
-type SessionLog = { sessionId: string | null; notes: string | null }
-type AttendanceRecord = { studentId: string; sessionId: string; present: boolean }
+
+type GroupTrack = {
+    id: string
+    startDate: Date
+    track: {
+        id: string
+        title: string
+        sessions: Session[]
+    }
+}
+
+type SessionLog = {
+    sessionId: string | null
+    notes: string | null
+    date: Date
+}
+
+type GroupDetailClientProps = {
+    groupId: string
+    students: any[]
+    groupTracks: GroupTrack[]
+    sessions?: Session[] // New prop, optional for compatibility but expected now
+    attendanceRecords: any[]
+    sessionLogs: SessionLog[]
+    startDate?: Date | null
+}
 
 export default function GroupDetailClient({
     groupId,
     students,
-    attendanceRecords,
+    groupTracks,
     sessions,
-    sessionLogs,
-    startDate
-}: {
-    groupId: string
-    students: Student[]
-    attendanceRecords: AttendanceRecord[]
-    sessions: Session[]
-    sessionLogs: SessionLog[]
-    startDate: Date | null
-}) {
-    const [activeTab, setActiveTab] = useState<'attendance' | 'track' | 'eval'>('attendance')
+    attendanceRecords,
+    sessionLogs
+}: GroupDetailClientProps) {
+    const [activeTab, setActiveTab] = useState('attendance')
+
+    // Use passed sessions or fallback (though page.tsx should provide them now)
+    // We convert string dates back to Date objects if needed because AttendanceTab expects Date or checks with new Date()
+    const allSessions = (sessions || []).map(s => ({
+        ...s,
+        date: typeof s.date === 'string' ? new Date(s.date) : s.date
+    }))
 
     return (
         <div className="space-y-6">
-            {/* Tabs Header */}
-            <div className="flex p-1 bg-gray-100 rounded-xl">
-                <button
-                    onClick={() => setActiveTab('attendance')}
-                    className={clsx(
-                        "flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-lg transition-all",
-                        activeTab === 'attendance'
-                            ? "bg-white text-brand-navy shadow-sm"
-                            : "text-gray-500 hover:text-gray-700"
-                    )}
-                >
-                    <UserCheck className="w-4 h-4" />
-                    Asistencia
-                </button>
-                <button
-                    onClick={() => setActiveTab('track')}
-                    className={clsx(
-                        "flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-lg transition-all",
-                        activeTab === 'track'
-                            ? "bg-white text-brand-navy shadow-sm"
-                            : "text-gray-500 hover:text-gray-700"
-                    )}
-                >
-                    <BookOpen className="w-4 h-4" />
-                    Plan de Estudios
-                </button>
-                <button
-                    onClick={() => setActiveTab('eval')}
-                    className={clsx(
-                        "flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-lg transition-all",
-                        activeTab === 'eval'
-                            ? "bg-white text-brand-navy shadow-sm"
-                            : "text-gray-500 hover:text-gray-700"
-                    )}
-                >
-                    <Trophy className="w-4 h-4" />
-                    Evaluación
-                </button>
-            </div>
+            <Tabs defaultValue="attendance" className="w-full" onValueChange={setActiveTab}>
+                <TabsList className="grid w-full grid-cols-3 bg-white/5 border border-white/10 p-1 rounded-xl">
+                    <TabsTrigger value="attendance" className="data-[state=active]:bg-brand-yellow data-[state=active]:text-brand-navy text-gray-400 font-medium py-2 rounded-lg transition-all">
+                        <div className="flex items-center justify-center gap-2">
+                            <UserCheck className="w-4 h-4" />
+                            Asistencia
+                        </div>
+                    </TabsTrigger>
+                    <TabsTrigger value="track" className="data-[state=active]:bg-brand-blue data-[state=active]:text-white text-gray-400 font-medium py-2 rounded-lg transition-all">
+                        <div className="flex items-center justify-center gap-2">
+                            <BookOpen className="w-4 h-4" />
+                            Plan de Estudios
+                        </div>
+                    </TabsTrigger>
+                    <TabsTrigger value="evaluations" className="data-[state=active]:bg-purple-500 data-[state=active]:text-white text-gray-400 font-medium py-2 rounded-lg transition-all">
+                        <div className="flex items-center justify-center gap-2">
+                            <BarChart2 className="w-4 h-4" />
+                            Evaluaciones
+                        </div>
+                    </TabsTrigger>
+                </TabsList>
 
-            {/* Content */}
-            <div className="animate-in fade-in slide-in-from-bottom-2 duration-200">
-                {activeTab === 'attendance' && (
-                    <AttendanceTab
-                        groupId={groupId}
-                        students={students}
-                        attendanceRecords={attendanceRecords}
-                        startDate={startDate}
-                        sessions={sessions}
-                    />
-                )}
+                <div className="mt-6">
+                    <TabsContent value="attendance" className="m-0 focus-visible:outline-none">
+                        <AttendanceTab
+                            groupId={groupId}
+                            students={students}
+                            sessions={allSessions} // Pass consolidated sessions
+                            attendanceRecords={attendanceRecords}
+                        />
+                    </TabsContent>
 
-                {activeTab === 'track' && (
-                    <TrackTab
-                        groupId={groupId}
-                        sessions={sessions}
-                        logs={sessionLogs}
-                    />
-                )}
+                    <TabsContent value="track" className="m-0 focus-visible:outline-none">
+                        <TrackTab
+                            groupId={groupId}
+                            groupTracks={groupTracks} // Pass all tracks
+                            sessionLogs={sessionLogs}
+                        />
+                    </TabsContent>
 
-                {activeTab === 'eval' && (
-                    <EvaluationTab
-                        groupId={groupId}
-                        students={students}
-                    />
-                )}
-            </div>
+                    <TabsContent value="evaluations" className="m-0 focus-visible:outline-none">
+                        <EvaluationTab
+                            groupId={groupId}
+                            students={students}
+                        />
+                    </TabsContent>
+                </div>
+            </Tabs>
         </div>
     )
 }
