@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { School, Users, GraduationCap, Map, Clock, LogOut, TrendingUp } from 'lucide-react'
+import { School, Users, GraduationCap, Map, Clock, LogOut, TrendingUp, CalendarX } from 'lucide-react'
 import { logout } from '@/app/actions/auth'
 import clsx from 'clsx'
 
@@ -12,6 +12,7 @@ const navItems = [
     { label: 'Alumnos', href: '/admin/students', icon: GraduationCap },
     { label: 'Tracks', href: '/admin/tracks', icon: Map },
     { label: 'Altas y Bajas', href: '/admin/enrollments', icon: TrendingUp },
+    { label: 'Ausencias', href: '/admin/absences', icon: CalendarX },
     { label: 'Fichaje', href: '/admin/timelog', icon: Clock },
 ]
 

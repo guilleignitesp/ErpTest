@@ -18,10 +18,19 @@ export default async function TeacherDashboard() {
                     </p>
                 </div>
 
-                <Link href="/teacher/timelog" className="w-full md:w-auto flex items-center justify-center gap-3 px-8 py-4 bg-brand-yellow text-brand-navy font-black text-lg rounded-xl shadow-lg shadow-yellow-200 hover:shadow-xl hover:scale-105 transition-all transform active:scale-95">
-                    <Clock className="w-6 h-6" />
-                    CONTROL DE FICHAJE
-                </Link>
+                <div className="w-full md:w-auto flex flex-col sm:flex-row gap-4">
+                    <Link href="/teacher/timelog" className="flex-1 sm:flex-none flex items-center justify-center gap-3 px-8 py-4 bg-brand-yellow text-brand-navy font-black text-lg rounded-xl shadow-lg shadow-yellow-200 hover:shadow-xl hover:scale-105 transition-all transform active:scale-95">
+                        <Clock className="w-6 h-6" />
+                        CONTROL DE FICHAJE
+                    </Link>
+                    <Link
+                        href="/teacher/absences"
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-4 bg-white text-brand-navy font-bold rounded-xl shadow-md hover:shadow-lg transition-all border border-gray-100 hover:-translate-y-0.5"
+                    >
+                        <Calendar className="w-5 h-5 text-brand-blue" />
+                        GESTIÓN DE AUSENCIAS
+                    </Link>
+                </div>
             </div>
 
             {/* Groups Grid */}
