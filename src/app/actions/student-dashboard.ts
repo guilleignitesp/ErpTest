@@ -76,7 +76,7 @@ export async function getStudentDashboardData() {
     const nextLevelProgress = (xpForCurrentLevel / 1000) * 100
 
     // --- Leaderboard ---
-    let leaderboard = []
+    let leaderboard: any[] = []
     if (group) {
         const groupStudents = await prisma.user.findMany({
             where: {

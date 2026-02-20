@@ -22,7 +22,12 @@ type GroupTrack = {
     track: {
         id: string
         title: string
-        sessions: Session[]
+        sessions: {
+            id: string
+            title: string
+            orderIndex: number
+            link: string | null
+        }[]
     }
 }
 

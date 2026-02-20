@@ -162,3 +162,19 @@ model Evaluation {
   @@unique([groupId, studentId])
   @@unique([studentId, groupId]) // One evaluation profile per student per group
 }
+
+// Audit log for student enrollments (Altas) and cancellations (Bajas)
+model EnrollmentLog {
+  id           String   @id @default(cuid())
+  type         String   // "ALTA" or "BAJA"
+  date         DateTime @default(now())
+  
+  studentId    String?
+  studentName  String
+  
+  groupId      String?
+  groupName    String
+  
+  schoolName   String
+  teacherNames String?  // Comma separated list of teacher names at the time
+}

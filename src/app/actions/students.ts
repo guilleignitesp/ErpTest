@@ -16,7 +16,6 @@ export async function createAndAssignStudent(formData: FormData) {
     }
 
     try {
-        // Check if username already exists
         const existingUser = await prisma.user.findUnique({
             where: { username },
         })
@@ -25,12 +24,17 @@ export async function createAndAssignStudent(formData: FormData) {
             return { error: 'Username already exists' }
         }
 
-        // Create User and connect to Group
+        // Fetch group context for the log
+        const groupContext = await prisma.group.findUnique({
+            where: { id: groupId },
+            include: { school: true, teachers: true }
+        })
+
         const newUser = await prisma.user.create({
             data: {
                 name,
                 username,
-                password, // Storing plain text as per MVP requirements
+                password,
                 role: 'STUDENT',
                 groupsAsStudent: {
                     connect: { id: groupId },
@@ -38,7 +42,6 @@ export async function createAndAssignStudent(formData: FormData) {
             },
         })
 
-        // Create empty Evaluation for this student/group
         await prisma.evaluation.create({
             data: {
                 studentId: newUser.id,
@@ -46,6 +49,22 @@ export async function createAndAssignStudent(formData: FormData) {
                 xp: 0,
             },
         })
+
+        // --- NEW: LOG ALTA ---
+        if (groupContext) {
+            const teacherNames = groupContext.teachers.map(t => t.name).join(', ')
+            await prisma.enrollmentLog.create({
+                data: {
+                    type: 'ALTA',
+                    studentId: newUser.id,
+                    studentName: newUser.name,
+                    groupId: groupContext.id,
+                    groupName: groupContext.name,
+                    schoolName: groupContext.school.name,
+                    teacherNames: teacherNames || 'Sin profesor'
+                }
+            })
+        }
 
         revalidatePath(`/admin/groups/${groupId}`)
         return { success: true }
@@ -57,6 +76,15 @@ export async function createAndAssignStudent(formData: FormData) {
 
 export async function removeStudentFromGroup(groupId: string, studentId: string) {
     try {
+        // Fetch context BEFORE removing
+        const groupContext = await prisma.group.findUnique({
+            where: { id: groupId },
+            include: { school: true, teachers: true }
+        })
+        const studentContext = await prisma.user.findUnique({
+            where: { id: studentId }
+        })
+
         await prisma.group.update({
             where: { id: groupId },
             data: {
@@ -66,7 +94,21 @@ export async function removeStudentFromGroup(groupId: string, studentId: string)
             },
         })
 
-        // Optionally delete evaluation logic could go here, but keeping it simple for now (keep history)
+        // --- NEW: LOG BAJA ---
+        if (groupContext && studentContext) {
+            const teacherNames = groupContext.teachers.map(t => t.name).join(', ')
+            await prisma.enrollmentLog.create({
+                data: {
+                    type: 'BAJA',
+                    studentId: studentContext.id,
+                    studentName: studentContext.name,
+                    groupId: groupContext.id,
+                    groupName: groupContext.name,
+                    schoolName: groupContext.school.name,
+                    teacherNames: teacherNames || 'Sin profesor'
+                }
+            })
+        }
 
         revalidatePath(`/admin/groups/${groupId}`)
         return { success: true }

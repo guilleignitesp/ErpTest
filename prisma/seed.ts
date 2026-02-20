@@ -63,7 +63,7 @@ async function main() {
         },
     })
 
-    // 1 Group linked to School and Track
+    // 1 Group linked to School and Track (using GroupTrack relation)
     const group = await prisma.group.create({
         data: {
             name: 'Python Group A',
@@ -72,7 +72,12 @@ async function main() {
             subject: 'Python Level 1',
             ageRange: '10-12 years',
             schoolId: school.id,
-            trackId: track.id,
+            groupTracks: {
+                create: [{
+                    trackId: track.id,
+                    startDate: new Date(),
+                }]
+            },
             teachers: {
                 connect: [{ id: teacher.id }],
             },
